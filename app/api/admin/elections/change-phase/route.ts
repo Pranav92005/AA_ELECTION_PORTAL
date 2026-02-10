@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server"
 import { getSupabaseServerClient } from "@/lib/supabaseServer"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { sendMail } from "@/lib/mailer"
+
 
 export async function POST(req: Request) {
   try {
@@ -67,6 +69,38 @@ export async function POST(req: Request) {
       },
       requested_by: user.id,
     })
+
+
+    /* =========================
+   4.1 FETCH OBSERVER
+   ========================= */
+const { data: observer, error: observerError } = await supabaseAdmin
+  .from("users")
+  .select("email, name")
+  .eq("role", "OBSERVER")
+  .single()
+
+if (observerError || !observer) {
+  console.error("Observer not found for notification")
+} else {
+  await sendMail({
+    to: observer.email,
+    subject: "Approval Required: Election Phase Change",
+    html: `
+      <p>Hello ${observer.name || "Observer"},</p>
+
+      <p>An admin has requested a <strong>phase change</strong> for an election.</p>
+
+      <p><strong>Election ID:</strong> ${electionId}</p>
+      <p><strong>Requested New Phase:</strong> ${newPhase}</p>
+
+      <p>Please log in to the observer dashboard to approve or reject this request.</p>
+
+      <p>— IIT BBS Elections System</p>
+    `,
+  })
+}
+
 
     /* =========================
        5. AUDIT LOG

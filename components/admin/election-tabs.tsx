@@ -250,6 +250,23 @@ export interface PendingApproval {
   payload: any
 }
 
+
+function TabBlockedMessage({ message }: { message: string }) {
+  return (
+    <div className="flex min-h-75 items-center justify-center">
+      <p className="text-muted-foreground text-center text-sm">
+        {message}
+      </p>
+    </div>
+  )
+}
+
+
+
+
+
+
+
 export function ElectionTabs({ election }: ElectionTabsProps) {
   const [activeTab, setActiveTab] =
     useState<(typeof tabs)[number]>("Overview")
@@ -265,6 +282,7 @@ export function ElectionTabs({ election }: ElectionTabsProps) {
 
   const [pendingNominations, setPendingNominations] =
     useState<PendingApproval[]>([])
+    const electionStatus = election?.election?.status
 
   /* =========================
      FETCH USER ROLE
@@ -401,23 +419,33 @@ export function ElectionTabs({ election }: ElectionTabsProps) {
           />
         )}
 
-        {activeTab === "Nominations" && (
-          <NominationsTab
-            election={election}
-            userRole={userRole}
-            pendingNominations={pendingNominations}
-            refetchPendingNominations={fetchPendingNominations}
-          />
-        )}
+       {activeTab === "Nominations" && (
+  electionStatus === "NOMINATION" ? (
+    <NominationsTab
+      election={election}
+      userRole={userRole}
+      pendingNominations={pendingNominations}
+      refetchPendingNominations={fetchPendingNominations}
+    />
+  ) : (
+    <TabBlockedMessage message="Nominations will be available once the election enters the nomination phase." />
+  )
+)}
+
 
         {activeTab === "Results" && (
-          <ResultsTab
-            election={election}
-            userRole={userRole}
-            pendingApproval={pendingApproval}
-            refetchPendingApproval={fetchPendingApproval}
-          />
-        )}
+  electionStatus === "CLOSED" || electionStatus === "RESULTS_PUBLISHED" ? (
+    <ResultsTab
+      election={election}
+      userRole={userRole}
+      pendingApproval={pendingApproval}
+      refetchPendingApproval={fetchPendingApproval}
+    />
+  ) : (
+    <TabBlockedMessage message="Results will be available after the election is closed." />
+  )
+)}
+
       </div>
     </div>
   )

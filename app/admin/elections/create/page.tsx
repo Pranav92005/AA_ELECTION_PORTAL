@@ -164,6 +164,19 @@ export default function CreateElectionPage() {
     }
 
     // 4️⃣ Transform positions to backend format
+
+    for (const p of positions) {
+  if (!p.enableMultiChoice && p.maxSelections != null) {
+    throw new Error(
+      `Invalid position "${p.name}": single-choice cannot have max_selections`
+    )
+  }
+  if(p.enableMultiChoice && p.maxSelections < 2) {
+    throw new Error(
+      `Invalid position "${p.name}": max_selections must be at least 2`
+    )
+}}
+
     const formattedPositions = positions.map((p) => ({
       name: p.name,
       allowMultiple: p.enableMultiChoice,
@@ -345,7 +358,7 @@ export default function CreateElectionPage() {
                         <input
                           type="number"
                           id={`max-selections-${position.id}`}
-                          min="1"
+                          min="2"
                           value={position.maxSelections}
                           onChange={(e) => handleMaxSelectionsChange(position.id, e.target.value)}
                           className="w-full rounded-md border border-input bg-background px-4 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"

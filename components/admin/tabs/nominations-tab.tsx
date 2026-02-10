@@ -365,6 +365,7 @@ import { useEffect, useState } from "react"
 import axios from "axios"
 import type { AdminElectionDetailsResponse } from "@/app/admin/elections/[id]/page"
 import type { PendingApproval } from "../election-tabs"
+import { useRouter } from "next/navigation"
 
 /* ================= BACKEND RESPONSE ================= */
 
@@ -432,6 +433,8 @@ export function NominationsTab({
     useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [remark, setRemark] = useState("")
+  const router = useRouter()
+  
 
 
   /* ================= FETCH ================= */
@@ -569,12 +572,40 @@ export function NominationsTab({
     )
   }
 
+  
+
   const positions = Array.from(
     new Set(nominations.map(n => n.position))
   )
 
   return (
     <div className="space-y-6">
+
+      {/* ================= VIEW APPROVED NOMINATIONS ================= */}
+<div className="flex justify-end">
+  <button
+    onClick={() =>
+      router.push(
+        `/election/${election?.election.id}/candidates`
+      )
+    }
+    className="flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-primary hover:bg-muted"
+  >
+    View Approved Nominations →
+  </button>
+</div>
+
+
+
+
+      {nominations.length === 0 && !loading && (
+  <div className="flex min-h-50 items-center justify-center">
+    <p className="text-sm text-muted-foreground">
+      No pending nominations available.
+    </p>
+  </div>
+)}
+
       {positions.map(position => {
         const positionNominations = nominations.filter(
           n => n.position === position

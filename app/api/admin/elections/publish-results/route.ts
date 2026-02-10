@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { getSupabaseServerClient } from "@/lib/supabaseServer"
+import { sendMail } from "@/lib/mailer"
 
 export async function POST(req: Request) {
   try {
@@ -87,6 +88,41 @@ export async function POST(req: Request) {
       })
 
     if (error) throw error
+
+    /* =========================
+   NOTIFY OBSERVER (EMAIL)
+   ========================= */
+const { data: observer, error: observerError } = await supabaseAdmin
+  .from("users")
+  .select("email, name")
+  .eq("role", "OBSERVER")
+  .single()
+
+if (observerError || !observer) {
+  console.error("Observer not found for publish results notification")
+} else {
+  await sendMail({
+    to: observer.email,
+    subject: "Approval Required: Publish Election Results",
+    html: `
+      <p>Hello ${observer.name || "Observer"},</p>
+
+      <p>An admin has requested to <strong>publish election results</strong>.</p>
+
+      <p><strong>Election ID:</strong> ${electionId}</p>
+
+      <p>This action will make the results visible to all users.</p>
+
+      <p>Please log in to the observer dashboard to approve or reject this request.</p>
+
+      <p>— IIT BBS Elections System</p>
+    `,
+  })
+}
+
+
+
+
 
     return NextResponse.json({
       status: "PENDING_OBSERVER_APPROVAL"

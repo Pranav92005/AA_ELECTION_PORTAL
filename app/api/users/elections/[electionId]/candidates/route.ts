@@ -1,11 +1,11 @@
 // app/api/user/elections/[electionId]/candidates/route.ts
-import { NextResponse,NextRequest } from "next/server"
+import { NextResponse, NextRequest } from "next/server"
 
 import { getSupabaseServerClient } from "@/lib/supabaseServer"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 
 export async function GET(
- req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ electionId: string }> }
 ) {
   try {
@@ -38,25 +38,48 @@ export async function GET(
     const userEmail = user.email.toLowerCase()
 
     /* =========================
-       2. ELIGIBILITY CHECK
+       2. ROLE CHECK (ADMIN / OBSERVER BYPASS)
        ========================= */
-    const { data: voter } = await supabaseAdmin
-      .from("voters")
-      .select("id")
-      .eq("election_id", electionId)
-      .eq("email", userEmail)
-      .eq("is_active", true)
-      .maybeSingle()
+    const { data: userProfile, error: roleError } =
+      await supabaseAdmin
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .single()
 
-    if (!voter) {
+    if (roleError) {
       return NextResponse.json(
-        { error: "Forbidden" },
-        { status: 403 }
+        { error: "Unauthorized" },
+        { status: 401 }
       )
     }
 
+    const isPrivileged =
+      userProfile.role === "ADMIN" ||
+      userProfile.role === "OBSERVER"
+
     /* =========================
-       3. FETCH APPROVED CANDIDATES
+       3. VOTER CHECK (ONLY FOR NON-PRIVILEGED USERS)
+       ========================= */
+    if (!isPrivileged) {
+      const { data: voter } = await supabaseAdmin
+        .from("voters")
+        .select("id")
+        .eq("election_id", electionId)
+        .eq("email", userEmail)
+        .eq("is_active", true)
+        .maybeSingle()
+
+      if (!voter) {
+        return NextResponse.json(
+          { error: "Forbidden" },
+          { status: 403 }
+        )
+      }
+    }
+
+    /* =========================
+       4. FETCH APPROVED CANDIDATES
        ========================= */
     const { data: nominations, error } = await supabaseAdmin
       .from("nominations")
@@ -82,7 +105,7 @@ export async function GET(
     }
 
     /* =========================
-       4. GROUP BY POSITION
+       5. GROUP BY POSITION
        ========================= */
     const grouped: Record<number, any> = {}
 
@@ -108,7 +131,7 @@ export async function GET(
     })
 
     /* =========================
-       5. RESPONSE
+       6. RESPONSE
        ========================= */
     return NextResponse.json(
       Object.values(grouped)

@@ -129,6 +129,28 @@ export async function POST(req: Request) {
       .eq("id", user.id)
       .single()
 
+      /* =========================
+   CHECK EXISTING NOMINATION
+   ========================= */
+const { data: existingNomination } = await supabaseAdmin
+  .from("nominations")
+  .select("id")
+  .eq("election_id", electionId)
+  .eq("user_id", user.id)
+  .in("workflow_status", ["IN_PROGRESS", "ACTIVE"])
+  .maybeSingle()
+
+if (existingNomination) {
+  return NextResponse.json(
+    {
+      error:
+        "You have already submitted a nomination for this election. Only one nomination per election is allowed.",
+    },
+    { status: 400 }
+  )
+}
+
+
     /* =========================
        UPLOAD FILES
        ========================= */

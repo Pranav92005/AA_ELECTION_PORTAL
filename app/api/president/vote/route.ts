@@ -112,7 +112,7 @@ export async function POST(req: Request) {
     await supabaseAdmin
       .from("elections")
       .update({
-        president_vote_required: false
+        president_vote_completed: true,
       })
       .eq("id", tokenRow.election_id)
 

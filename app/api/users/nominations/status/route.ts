@@ -53,10 +53,11 @@ export async function GET() {
 
     /* =========================
        FETCH SUPPORTER APPROVALS
+       (DO NOT TOUCH – WORKING)
        ========================= */
     const { data: supporters, error: supportersError } = await supabaseAdmin
       .from("nomination_supporter_tokens")
-      .select("nomination_id, role, approved, approved_at")
+      .select("nomination_id, role, approved")
       .in("nomination_id", nominationIds)
 
     if (supportersError) throw supportersError
@@ -68,57 +69,51 @@ export async function GET() {
       const row = supporters?.find(
         s => s.nomination_id === nominationId && s.role === role
       )
-      if (!row) return "pending"
-      return row.approved ? "completed" : "pending"
+      return row?.approved ? "completed" : "pending"
     }
 
     /* =========================
-       FETCH ADMIN / OBSERVER
+       FETCH APPROVAL REQUESTS
        ========================= */
     const { data: approvals } = await supabaseAdmin
       .from("approval_requests")
-      .select("entity_id, status, action_type")
-      .eq("entity_type", "NOMINATION")
-      .in("entity_id", nominationIds)
+      .select("payload, status")
+      .eq("election_id", electionIds[0])
 
     /* =========================
-       BUILD RESPONSE (UI SAFE)
+       BUILD RESPONSE
        ========================= */
     const response = nominations.map(n => {
       const proposer = supporterStatus(n.id, "PROPOSER")
       const seconder = supporterStatus(n.id, "SECONDER")
 
-      const admin = approvals?.find(
-        a =>
-          a.entity_id === n.id &&
-          a.action_type === "NOMINATION_DECISION"
-      )
+      // 🔥 BULLETPROOF PAYLOAD MATCH (THIS IS THE FIX)
+      const approval = approvals?.find(a => {
+        const pid =
+          a.payload?.nominationId ??
+          a.payload?.nomination_id ??
+          a.payload?.id
 
-      const observer = approvals?.find(
-        a =>
-          a.entity_id === n.id &&
-          a.action_type === "OBSERVER_DECISION"
-      )
+        return pid?.toString() === n.id.toString()
+      })
 
-      const adminStatus =
-        admin?.status === "REJECTED"
-          ? "rejected"
-          : admin?.status === "APPROVED"
-          ? "completed"
-          : "pending"
+      let adminStatus: "completed" | "pending" | "rejected" = "pending"
+      let observerStatus: "completed" | "pending" | "rejected" = "pending"
 
-      const observerStatus =
-        observer?.status === "REJECTED"
-          ? "rejected"
-          : observer?.status === "APPROVED"
-          ? "completed"
-          : "pending"
+      if (approval) {
+        if (approval.status === "APPROVED") {
+          adminStatus = "completed"
+          observerStatus = "completed"
+        } else if (approval.status === "REJECTED") {
+          adminStatus = "rejected"
+          observerStatus = "rejected"
+        }
+      }
 
       const overallStatus =
-        admin?.status === "REJECTED" || observer?.status === "REJECTED"
+        approval?.status === "REJECTED"
           ? "rejected"
-          : admin?.status === "APPROVED" &&
-            observer?.status === "APPROVED"
+          : approval?.status === "APPROVED"
           ? "approved"
           : "pending"
 

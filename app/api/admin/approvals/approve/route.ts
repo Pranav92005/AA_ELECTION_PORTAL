@@ -73,6 +73,14 @@ console.log("Approval Request ID:", approvalRequestId)
         newVoters,
       } = approval.payload
 
+      if (!Array.isArray(phases) || phases.length === 0) {
+  console.warn("Skipping phase update: empty payload")
+  return
+}
+
+
+
+
       // Update election core
       await supabaseAdmin
         .from("elections")
@@ -89,14 +97,24 @@ console.log("Approval Request ID:", approvalRequestId)
         .delete()
         .eq("election_id", approval.election_id)
 
-      await supabaseAdmin.from("positions").insert(
-        positions.map((p: any) => ({
-          election_id: approval.election_id,
-          name: p.name,
-          allow_multiple: p.allowMultiple,
-          max_selections: p.allowMultiple ? p.maxSelections : null,
-        }))
-      )
+    const { data, error } = await supabaseAdmin
+  .from("positions")
+  .insert(
+    positions.map((p: any) => ({
+      election_id: approval.election_id,
+      name: p.name,
+      allow_multiple: Boolean(p.allow_multiple),
+      max_selections: p.allow_multiple
+        ? p.max_selections ??2
+        : null,
+    }))
+  )
+  .select()
+
+console.log("INSERT POSITIONS DATA:", data)
+console.log("INSERT POSITIONS ERROR:", error)
+
+
 
       // Replace phases
       await supabaseAdmin
@@ -104,14 +122,15 @@ console.log("Approval Request ID:", approvalRequestId)
         .delete()
         .eq("election_id", approval.election_id)
 
-      await supabaseAdmin.from("election_phases").insert(
+       await supabaseAdmin.from("election_phases").insert(
         phases.map((p: any) => ({
           election_id: approval.election_id,
           phase: p.phase,
-          start_date: p.start,
-          end_date: p.end,
+          start_date: p.start_date || null,
+          end_date: p.end_date || null,
         }))
       )
+      
 
       // Add new voters if provided
       if (Array.isArray(newVoters) && newVoters.length > 0) {
@@ -305,6 +324,38 @@ if (!tied || tied.length === 0) {
         reviewed_at: new Date().toISOString(),
       })
       .eq("id", approval.id)
+
+      /* =========================
+   NOTIFY ADMIN (EMAIL)
+   ========================= */
+const { data: admin, error: adminError } = await supabaseAdmin
+  .from("users")
+  .select("email, name")
+  .eq("id", approval.requested_by)
+  .single()
+
+if (adminError || !admin) {
+  console.error("Admin not found for approval notification")
+} else {
+  await sendMail({
+    to: admin.email,
+    subject: "Approval Request Approved",
+    html: `
+      <p>Hello ${admin.name || "Admin"},</p>
+
+      <p>Your approval request has been <strong>APPROVED</strong> by the observer.</p>
+
+      <p><strong>Action:</strong> ${approval.action_type}</p>
+      <p><strong>Election ID:</strong> ${approval.election_id}</p>
+
+      <p>The requested action has been successfully executed.</p>
+
+      <p>— IIT BBS Elections System</p>
+    `,
+  })
+}
+
+
 
     return NextResponse.json({ status: "APPROVED" })
   } catch (err) {

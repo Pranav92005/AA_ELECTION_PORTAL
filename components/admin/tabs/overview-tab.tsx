@@ -781,7 +781,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { AdminElectionDetailsResponse } from "@/app/admin/elections/[id]/page"
 import type { PendingApproval } from "../election-tabs"
 import axios from "axios"
@@ -815,19 +815,19 @@ export function OverviewTab({
   ]
 
   const [editData, setEditData] = useState({
-    title: election?.election.title ?? "",
-    academicYear: election?.election.academic_year ?? "",
-    description: election?.election.description ?? "",
-  })
+  title: "",
+  academicYear: "",
+  description: "",
+})
 
   const [editPositions, setEditPositions] =
     useState<AdminElectionDetailsResponse["positions"]>(
-      election?.positions ?? []
+       []
     )
 
   const [editPhaseDates, setEditPhaseDates] =
     useState<AdminElectionDetailsResponse["phases"]>(
-      election?.phases ?? []
+       []
     )
 
   const [voterListFile, setVoterListFile] = useState<{
@@ -850,7 +850,7 @@ export function OverviewTab({
       ? pendingApproval.payload
       : null
 
-      console.log({  proposedChanges })
+  console.log({ proposedChanges })
 
   /* ================= HELPERS ================= */
 
@@ -859,41 +859,108 @@ export function OverviewTab({
 
   /* ================= VALIDATION ================= */
 
+useEffect(() => {
+  if (!election) return
+
+  setEditData({
+    title: election.election.title ?? "",
+    academicYear: election.election.academic_year ?? "",
+    description: election.election.description ?? "",
+  })
+
+  setEditPositions(
+  (election.positions ?? []).map(p => ({
+    ...p,
+    allow_multiple: !!p.allow_multiple,
+    max_selections: p.allow_multiple
+      ? p.max_selections ?? 1
+      : 1,
+  }))
+)
+
+  setEditPhaseDates(election.phases ?? [])
+}, [election])
+
+
+
+
+
+
+
   const validateEdit = (): boolean => {
-    const newErrors: Record<string, string> = {}
+  const newErrors: Record<string, string> = {}
 
-    if (!editData.title.trim())
-      newErrors.title = "Election title is required"
+  /* ---------- Election-level validation ---------- */
 
-    if (!editData.academicYear.trim())
-      newErrors.academicYear = "Academic year is required"
-
-    editPositions.forEach(pos => {
-      if (!pos.name.trim())
-        newErrors[`position-${pos.id}`] =
-          "Position name is required"
-
-      if (pos.allow_multiple && (pos.max_selections ?? 0) < 1)
-        newErrors[`maxselections-${pos.id}`] =
-          "Maximum selections must be at least 1"
-    })
-
-    editPhaseDates.forEach(phase => {
-      if (!phase.start_date || !phase.end_date)
-        newErrors[`${phase.phase}-dates`] =
-          "Start and end dates are required"
-      else if (phase.start_date > phase.end_date)
-        newErrors[`${phase.phase}-dates`] =
-          "Start date must be before end date"
-    })
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+  if (!editData.title.trim()) {
+    newErrors.title = "Election title is required"
   }
+
+  if (!editData.academicYear.trim()) {
+    newErrors.academicYear = "Academic year is required"
+  }
+
+  /* ---------- Positions validation ---------- */
+
+  editPositions.forEach(pos => {
+    if (!pos.name.trim()) {
+      newErrors[`position-${pos.id}`] =
+        "Position name is required"
+    }
+
+    if (!pos.allow_multiple) {
+      // Single-choice → max_selections MUST be null
+      if (pos.max_selections != null) {
+        newErrors[`maxselections-${pos.id}`] =
+          "Single-choice position cannot have max selections"
+      }
+    } else {
+      // Multi-choice → max_selections >= 2
+      if (pos.max_selections == null || pos.max_selections < 2) {
+        newErrors[`maxselections-${pos.id}`] =
+          "Maximum selections must be at least 2"
+      }
+    }
+  })
+
+  /* ---------- Phases validation ---------- */
+
+  editPhaseDates.forEach(phase => {
+    if (!phase.start_date || !phase.end_date) {
+      newErrors[`${phase.phase}-dates`] =
+        "Start and end dates are required"
+    } else if (phase.start_date > phase.end_date) {
+      newErrors[`${phase.phase}-dates`] =
+        "Start date must be before end date"
+    }
+  })
+
+  /* ---------- Commit errors ---------- */
+
+  setErrors(newErrors)
+  return Object.keys(newErrors).length === 0
+}
 
   /* ================= ACTIONS ================= */
 
   const handleSave = async () => {
+    if (!editPhaseDates || editPhaseDates.length === 0) {
+  alert("Election phases are required")
+  return
+}
+// for (const p of editPositions) {
+//   if (!p.allow_multiple && p.max_selections != null) {
+//     throw new Error(
+//       `Invalid position "${p.name}": single-choice cannot have max_selections`
+//     )
+//   }
+//   if(p.allow_multiple && (p.max_selections == null || p.max_selections < 2)) {
+//     throw new Error(
+//       `Invalid position "${p.name}": max_selections must be at least 2`
+//     )
+// }}
+
+
     if (!validateEdit() || !election) return
 
     const formData = new FormData()
@@ -902,7 +969,13 @@ export function OverviewTab({
     formData.append("academicYear", editData.academicYear)
     formData.append("description", editData.description)
     formData.append("positions", JSON.stringify(editPositions))
-    formData.append("phases", JSON.stringify(editPhaseDates))
+   const sanitizedPhases = editPhaseDates.map(p => ({
+  phase: p.phase,
+  start_date: p.start_date || null,
+  end_date: p.end_date || null,
+}))
+
+formData.append("phases", JSON.stringify(sanitizedPhases))
 
     if (editVoterListFile) {
       formData.append("voterFile", editVoterListFile)
@@ -1202,7 +1275,7 @@ if (isEditPending && userRole === "observer") {
           <div className="rounded-lg border border-border bg-card p-6">
             <div className="mb-6 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-foreground">Election Information</h3>
-              {userRole === "admin" && (
+              {userRole === "admin"&&election?.election.status === "DRAFT" && (
                 <button
                   onClick={() => {
                     setEditPositions(election?.positions || [])
@@ -1410,7 +1483,7 @@ if (isEditPending && userRole === "observer") {
                       <input
                         type="checkbox"
                         id={`edit-multi-choice-${position.id}`}
-                        checked={position.allow_multiple}
+                        checked={!!position.allow_multiple}
                         onChange={() => handleMultiChoiceToggle(position.id)}
                         className="h-4 w-4 rounded border-input accent-primary"
                       />
@@ -1433,7 +1506,7 @@ if (isEditPending && userRole === "observer") {
                         <input
                           type="number"
                           id={`edit-max-${position.id}`}
-                          min="1"
+                          min="2"
                           value={position.max_selections ?? ""}
                           onChange={(e) => handleMaxSelectionsChange(position.id, e.target.value)}
                           className="w-full rounded-md border border-input bg-background px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
@@ -1504,7 +1577,7 @@ if (isEditPending && userRole === "observer") {
             <button
               type="button"
               onClick={handleSave}
-              disabled={Object.keys(errors).length > 0}
+              // disabled={Object.keys(errors).length > 0}
               className="flex-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               Save changes

@@ -160,14 +160,13 @@ export async function POST(
         )
       }
 
-      for (const candidateId of candidateIds as string[]) {
-        voteRows.push({
+      voteRows.push({
   election_id: electionId,
   position_id: positionId,
-  nomination_id: candidateId,
   hashed_voter_id: hashedVoterId,
+  candidate_ids: candidateIds, 
 })
-      }
+
     }
 
     /* =========================

@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server"
 import { getSupabaseServerClient } from "@/lib/supabaseServer"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { sendMail } from "@/lib/mailer"
 
 export async function POST(req: Request) {
   try {
@@ -93,6 +94,42 @@ export async function POST(req: Request) {
       payload,
       requested_by: user.id,
     })
+/* =========================
+   6.1 NOTIFY OBSERVER (EMAIL)
+   ========================= */
+const { data: observer, error: observerError } = await supabaseAdmin
+  .from("users")
+  .select("email, name")
+  .eq("role", "OBSERVER")
+  .single()
+
+if (observerError || !observer) {
+  console.error("Observer not found for edit election notification")
+} else {
+  await sendMail({
+    to: observer.email,
+    subject: "Approval Required: Election Details Update",
+    html: `
+      <p>Hello ${observer.name || "Observer"},</p>
+
+      <p>An admin has requested to <strong>edit election details</strong>.</p>
+
+      <p><strong>Election ID:</strong> ${electionId}</p>
+
+      <p>This request may include:</p>
+      <ul>
+        <li>Title / Description changes</li>
+        <li>Position updates</li>
+        <li>Phase modifications</li>
+        <li>Voter list changes</li>
+      </ul>
+
+      <p>Please log in to the observer dashboard to review and approve or reject this request.</p>
+
+      <p>— IIT BBS Elections System</p>
+    `,
+  })
+}
 
     /* =========================
        7. AUDIT LOG

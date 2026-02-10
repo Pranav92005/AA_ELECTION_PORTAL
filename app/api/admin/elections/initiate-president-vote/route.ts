@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getSupabaseServerClient } from "@/lib/supabaseServer"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { sendMail } from "@/lib/mailer"
 
 export async function POST(req: Request) {
   try {
@@ -38,7 +39,38 @@ export async function POST(req: Request) {
       payload: {},
       requested_by: user.id,
     })
-    console.log("Created approval request:", data)
+    // console.log("Created approval request:", data)
+    /* =========================
+   NOTIFY OBSERVER (EMAIL)
+   ========================= */
+const { data: observer, error: observerError } = await supabaseAdmin
+  .from("users")
+  .select("email, name")
+  .eq("role", "OBSERVER")
+  .single()
+
+if (observerError || !observer) {
+  console.error("Observer not found for president vote notification")
+} else {
+  await sendMail({
+    to: observer.email,
+    subject: "Approval Required: Initiate President Vote",
+    html: `
+      <p>Hello ${observer.name || "Observer"},</p>
+
+      <p>An admin has requested to <strong>initiate the President Vote</strong>.</p>
+
+      <p><strong>Election ID:</strong> ${electionId}</p>
+
+      <p>This action requires your approval before the president voting process can begin.</p>
+
+      <p>Please log in to the observer dashboard to approve or reject this request.</p>
+
+      <p>— IIT BBS Elections System</p>
+    `,
+  })
+}
+
 
     return NextResponse.json({
       status: "PENDING_OBSERVER_APPROVAL",
