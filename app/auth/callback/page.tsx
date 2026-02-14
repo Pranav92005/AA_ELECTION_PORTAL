@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
+import { CenteredLoader } from "@/components/ui/loader"
 
 export default function AuthCallbackPage() {
   const router = useRouter()
@@ -49,5 +50,5 @@ export default function AuthCallbackPage() {
     handleAuth()
   }, [router])
 
-  return <p>Signing you in...</p>
+  return <CenteredLoader />
 }

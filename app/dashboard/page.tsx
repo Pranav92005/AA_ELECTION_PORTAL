@@ -4,6 +4,7 @@ import DashboardHeader from "@/components/dashboard/header"
 import ElectionCard from "@/components/dashboard/election-card"
 import axios from "axios"
 import { useEffect, useState } from "react"
+import { CenteredLoader } from "@/components/ui/loader"
 
 
 
@@ -80,6 +81,7 @@ export interface ElectionDetails {
 export default function DashboardPage() {
   const [ongoingElections, setOngoingElections] = useState<ElectionDetails[]>([])
   const [pastElections, setPastElections] = useState<ElectionDetails[]>([])
+  const [loading, setLoading] = useState(true)
 
 
   useEffect(() => {const fetchElections = async () => {
@@ -97,6 +99,7 @@ export default function DashboardPage() {
 
       setOngoingElections(ongoing)
       setPastElections(past)
+      setLoading(false)
     } catch (error) {
       console.error("Error fetching elections:", error)
     }
@@ -104,6 +107,11 @@ export default function DashboardPage() {
 
   fetchElections()
   }, [])
+
+
+  if (loading) {
+    return <CenteredLoader />
+  }
 
 
   return (

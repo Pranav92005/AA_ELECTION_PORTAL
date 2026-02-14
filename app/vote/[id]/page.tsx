@@ -8,6 +8,7 @@ import DashboardHeader from "@/components/dashboard/header"
 import { useEffect, useState } from "react"
 import axios from "axios"
 import { useParams } from "next/navigation"
+import { CenteredLoader } from "@/components/ui/loader"
 
 interface VotingApiResponse {
   electionId: number
@@ -148,7 +149,7 @@ try{
     window.location.href = "/vote-confirmation"}
   }
 
-  if (loading) return null
+  if (loading) return <CenteredLoader />
 
   /* =========================
      RENDER

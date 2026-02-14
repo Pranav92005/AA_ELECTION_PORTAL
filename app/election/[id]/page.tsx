@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import DashboardHeader from "@/components/dashboard/header"
 import { useState,useEffect, use } from "react"
 import axios from "axios"
+import { CenteredLoader } from "@/components/ui/loader"
 
 
 export interface UserElectionDetailsResponse {
@@ -40,6 +41,7 @@ export default function ElectionOverviewPage({
 }) {
   const [electionDetails, setElectionDetails] = useState<UserElectionDetailsResponse | null>(null)
   const { id}=use(params)
+  const [loading, setLoading] = useState(true)
 
 
   useEffect(()=>{
@@ -49,6 +51,7 @@ export default function ElectionOverviewPage({
         const data = response.data
         setElectionDetails(data)
         console.log("Fetched election details:", data)
+        setLoading(false)
       } catch (error) {
         console.error("Error fetching election details:", error)
       }
@@ -97,6 +100,10 @@ export default function ElectionOverviewPage({
   //   nominationDeadline: "2025-01-10",
   //   votingDate: "2025-01-15",
   // }
+
+  if (loading) {
+    return <CenteredLoader />
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -249,11 +256,11 @@ export default function ElectionOverviewPage({
             </Button>
           </Link>
 
-          <Link href={`/election/${electionDetails?.election.id}/rules`}>
+          {/* <Link href={`/election/${electionDetails?.election.id}/rules`}>
             <Button variant="outline" size="sm">
               Election rules
             </Button>
-          </Link>
+          </Link> */}
 
           <Link href={`/nomination/${electionDetails?.election.id}`}>
             <Button size="sm">

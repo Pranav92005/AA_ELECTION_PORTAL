@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import DashboardHeader from "@/components/dashboard/header"
 import { useParams } from "next/navigation"
 import { useEffect,useState } from "react"
+import { CenteredLoader } from "@/components/ui/loader"
 
 export interface ElectionCandidatesResponse {
   positionId: number
@@ -27,6 +28,7 @@ export default function ViewCandidatesPage({ params }: { params: { id: string } 
   const param= useParams()
   const electionId = param.id
   const[electionDetails,setElectionDetails]=useState<ElectionCandidatesResponse[] |null>(null)
+  const[loading,setLoading]=useState(true)
 
   useEffect(()=>{
     async function fetchCandidates() {
@@ -35,6 +37,7 @@ export default function ViewCandidatesPage({ params }: { params: { id: string } 
         const data = await response.json()
         setElectionDetails(data)
         console.log("CANDIDATES DATA:", data)
+        setLoading(false)
       } catch (error) {
         console.error("Error fetching candidates:", error)
       }
@@ -112,6 +115,10 @@ export default function ViewCandidatesPage({ params }: { params: { id: string } 
   //     candidates: [],
   //   },
   // ]
+
+  if(loading){
+    return <CenteredLoader />
+  }
 
   return (
     <div className="min-h-screen bg-background">

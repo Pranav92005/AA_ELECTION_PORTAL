@@ -4,6 +4,7 @@ import { ElectionCard } from "@/components/admin/election-card"
 import Link from "next/link"
 import { useState,useEffect } from "react"
 import axios from "axios";
+import { CenteredLoader } from "@/components/ui/loader";
 
 
 export interface Election {
@@ -26,6 +27,7 @@ export default function AdminDashboard() {
 const [recentElections, setRecentElections] = useState<Election[]>([]);
 const [ongoingElections, setOngoingElections] = useState<Election[]>([]);
 const [pastElections, setPastElections] = useState<Election[]>  ([]);
+const [loading, setLoading] = useState(true);
 
 
 useEffect(() => {
@@ -37,12 +39,18 @@ useEffect(() => {
       setRecentElections(data.created);
       setOngoingElections(data.ongoing);
       setPastElections(data.past);
+      setLoading(false);
     })
     .catch(error => {
       console.error('Error fetching elections:', error);
     });
 
 }, []);
+
+
+if(loading) {
+  return <CenteredLoader />
+}
 
 
 

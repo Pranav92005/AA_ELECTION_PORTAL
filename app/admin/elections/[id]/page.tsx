@@ -4,6 +4,7 @@ import { ElectionTabs } from "@/components/admin/election-tabs"
 import { useEffect, useState } from "react"
 import axios from "axios"
 import { useParams, useRouter } from "next/navigation"
+import { CenteredLoader } from "@/components/ui/loader"
 
 /* =========================
    TYPES
@@ -92,7 +93,7 @@ export default function ElectionDetailPage() {
   }, [id, router])
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+    return <CenteredLoader />
   }
 
   if (!election) {
