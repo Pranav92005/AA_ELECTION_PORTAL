@@ -166,7 +166,7 @@ export default function CreateElectionPage() {
     // 4️⃣ Transform positions to backend format
 
     for (const p of positions) {
-  if (!p.enableMultiChoice && p.maxSelections != null) {
+  if (!p.enableMultiChoice && p.maxSelections>1) {
     throw new Error(
       `Invalid position "${p.name}": single-choice cannot have max_selections`
     )
