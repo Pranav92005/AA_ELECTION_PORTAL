@@ -175,26 +175,84 @@ console.log("Approval Request ID:", approvalRequestId)
 
 
      /* ---------- CASE 3: NOMINATION DECISION ---------- */
+
+
+
+     
+
+
+
+
     else if (approval.action_type === "NOMINATION_DECISION") {
   const { decision } = approval.payload
-  // console.log("NOMINATION DECISION APPROVAL:", decision)
 
-  const fire=await supabaseAdmin
+  // Get nomination info
+  const { data: nomination, error: nomErr } = await supabaseAdmin
+    .from("nominations")
+    .select("id, user_id")
+    .eq("id", approval.payload.nomination_id)
+    .single()
+
+  if (nomErr) throw nomErr
+
+  // Get nominee info
+  const { data: nominee, error: userErr } = await supabaseAdmin
+    .from("users")
+    .select("email, name")
+    .eq("id", nomination.user_id)
+    .single()
+
+  if (userErr) throw userErr
+
+  // Update nomination status
+  const { data: fire, error: updateErr } = await supabaseAdmin
     .from("nominations")
     .update({
       status: decision === "APPROVE" ? "APPROVED" : "REJECTED",
       reviewed_by: user.id,
     })
     .eq("id", approval.payload.nomination_id)
-    console.log("NOMINATION UPDATE RESULT:", fire)
 
-  await supabaseAdmin.from("audit_logs").insert({
+  console.log("NOMINATION UPDATE RESULT:", fire)
+
+  if (updateErr) throw updateErr
+
+  // Send mail to nominee
+  await sendMail({
+    to: nominee.email,
+    subject:
+      decision === "APPROVE"
+        ? "Your nomination has been approved"
+        : "Your nomination has been rejected",
+    html: `
+      <p>Hello ${nominee.name || "Candidate"},</p>
+
+      ${
+        decision === "APPROVE"
+          ? `
+          <p>Your nomination has been <b>approved</b> by the election committee.</p>
+          <p>You are now officially a candidate for the election.</p>
+          <p>Best of luck for the upcoming election!</p>
+          `
+          : `
+          <p>Your nomination has been <b>rejected</b> by the election committee.</p>
+          <p>You may <b>reapply again</b> with stronger credentials and an improved Statement of Purpose (SOP).</p>
+          <p>Please ensure your application clearly highlights your achievements and motivation for the role.</p>
+          `
+      }
+    `,
+  })
+
+  // Insert audit log
+  const { error: logErr } = await supabaseAdmin.from("audit_logs").insert({
     action: "FINALIZE_NOMINATION",
     entity_type: "NOMINATION",
     entity_id: approval.payload.nomination_id,
     performed_by: user.id,
     metadata: { decision },
   })
+
+  if (logErr) throw logErr
 }
 
 

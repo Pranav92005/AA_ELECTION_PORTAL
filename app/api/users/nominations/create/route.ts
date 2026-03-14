@@ -132,11 +132,22 @@ export async function POST(req: Request) {
       /* =========================
    CHECK EXISTING NOMINATION
    ========================= */
+// const { data: existingNomination } = await supabaseAdmin
+//   .from("nominations")
+//   .select("id")
+//   .eq("election_id", electionId)
+//   .eq("user_id", user.id)
+//   .in("workflow_status", ["IN_PROGRESS", "ACTIVE"])
+//   .maybeSingle()
+
+
+
 const { data: existingNomination } = await supabaseAdmin
   .from("nominations")
   .select("id")
   .eq("election_id", electionId)
   .eq("user_id", user.id)
+  .neq("status", "REJECTED")   // allow reapply if rejected
   .in("workflow_status", ["IN_PROGRESS", "ACTIVE"])
   .maybeSingle()
 
