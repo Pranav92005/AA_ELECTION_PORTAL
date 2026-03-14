@@ -142,15 +142,16 @@ export async function POST(req: Request) {
 
 
 
-const { data: existingNomination } = await supabaseAdmin
+const { data: existingNomination, error: existingError } = await supabaseAdmin
   .from("nominations")
   .select("id")
   .eq("election_id", electionId)
   .eq("user_id", user.id)
-  .neq("status", "REJECTED")   // allow reapply if rejected
+  .neq("status", "REJECTED")
   .in("workflow_status", ["IN_PROGRESS", "ACTIVE"])
-  .maybeSingle()
+  .limit(1)
 
+if (existingError) throw existingError
 if (existingNomination) {
   return NextResponse.json(
     {
