@@ -209,6 +209,7 @@ console.log("Approval Request ID:", approvalRequestId)
     .from("nominations")
     .update({
       status: decision === "APPROVE" ? "APPROVED" : "REJECTED",
+       workflow_status: decision === "APPROVE" ? "ACTIVE" : "FAILED",
       reviewed_by: user.id,
     })
     .eq("id", approval.payload.nomination_id)
