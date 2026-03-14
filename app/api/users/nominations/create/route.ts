@@ -151,8 +151,10 @@ const { data: existingNomination, error: existingError } = await supabaseAdmin
   .in("workflow_status", ["IN_PROGRESS", "ACTIVE"])
   .limit(1)
 
+  // console.log("Existing nomination check:", { existingNomination, existingError })
+
 if (existingError) throw existingError
-if (existingNomination) {
+if (existingNomination && existingNomination.length > 0) {
   return NextResponse.json(
     {
       error:
