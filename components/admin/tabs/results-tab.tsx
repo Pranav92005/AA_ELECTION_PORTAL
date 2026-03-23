@@ -506,16 +506,12 @@ export function ResultsTab({
   const totalVoters = election?.stats.totalVoters ?? 0
 
   const hasTie = useMemo(() => {
-    return results.some(position => {
-      const winners = position.candidates.filter(c => c.isWinner)
-      if (!winners.length) return false
-
-      const lastWinnerVotes = Math.min(...winners.map(c => c.voteCount))
-      const tied = position.candidates.filter(c => c.voteCount === lastWinnerVotes)
-
-      return tied.length > 1
-    })
-  }, [results])
+  return results.some(position => {
+    const winnersCount = position.candidates.filter(c => c.isWinner).length;
+    // A tie only matters if we have more winners than actual seats
+    return winnersCount > position.maxSelections;
+  })
+}, [results])
 
   const canPublishResults =
     !hasTie || presidentVoteCompleted
