@@ -346,7 +346,7 @@
 
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useCallback } from "react"
 import axios from "axios"
 import type { AdminElectionDetailsResponse } from "@/app/admin/elections/[id]/page"
 import type { PendingApproval } from "../election-tabs"
@@ -361,18 +361,19 @@ interface SnapshotRow {
   result_type?: "VOTED" | "UNCONTESTED"
   position_name?: string
   candidate_name?: string
-  max_selections: number // ✅ ADDED
+  max_selections: number
 }
 
 interface PositionResult {
   positionId: number
   positionName: string
-  maxSelections: number // ✅ ADDED
+  maxSelections: number
   candidates: {
     candidateId: string
     candidateName: string
     voteCount: number
     isWinner: boolean
+    is_tie: boolean // ✅ ADDED: To track tie status
     resultType?: "VOTED" | "UNCONTESTED"
   }[]
 }
@@ -398,9 +399,9 @@ export function ResultsTab({
   const [presidentVoteRequired, setPresidentVoteRequired] = useState(false)
   const [presidentVoteCompleted, setPresidentVoteCompleted] = useState(false)
 
-  /* ================= FETCH SNAPSHOT ================= */
+  /* ================= FETCH DATA LOGIC ================= */
 
-  const fetchSnapshot = async () => {
+  const fetchSnapshot = useCallback(async (isPresidentVoteDone: boolean) => {
     if (!election?.election.id) return
 
     setLoading(true)
@@ -417,7 +418,7 @@ export function ResultsTab({
           grouped[row.position_id] = {
             positionId: row.position_id,
             positionName: row.position_name ?? "Unknown",
-            maxSelections: row.max_selections ?? 1, // ✅ ADDED
+            maxSelections: row.max_selections ?? 1,
             candidates: [],
           }
         }
@@ -427,6 +428,7 @@ export function ResultsTab({
           candidateName: row.candidate_name ?? "Candidate",
           voteCount: row.vote_count,
           isWinner: false,
+          is_tie: row.is_tie, // ✅ Map backend tie status
           resultType: row.result_type,
         })
       })
@@ -459,10 +461,22 @@ export function ResultsTab({
 
         return {
           ...position,
-          candidates: candidates.map(c => ({
-            ...c,
-            isWinner: c.voteCount >= cutoff,
-          })),
+          candidates: candidates.map(c => {
+            let isWinner = c.voteCount >= cutoff;
+
+            // ✅ TIE-BREAKER OVERRIDE
+            // If president has voted and candidates are tied at the cutoff line:
+            if (isPresidentVoteDone && c.voteCount === cutoff) {
+              // Based on your JSON snippet, the winner gets `is_tie: false` 
+              // while the loser remains `is_tie: true`.
+              isWinner = c.is_tie === false;
+            }
+
+            return {
+              ...c,
+              isWinner,
+            }
+          }),
         }
       })
 
@@ -474,12 +488,10 @@ export function ResultsTab({
     } finally {
       setLoading(false)
     }
-  }
+  }, [election?.election.id])
 
-  /* ================= FETCH META ================= */
-
-  const fetchMeta = async () => {
-    if (!election) return
+  const fetchMeta = useCallback(async () => {
+    if (!election) return false
 
     const { data } = await axios.get(
       "/api/admin/elections/meta",
@@ -487,39 +499,36 @@ export function ResultsTab({
     )
 
     setPresidentVoteRequired(Boolean(data.president_vote_required))
-    setPresidentVoteCompleted(Boolean(data.president_vote_completed))
-  }
+    
+    const isCompleted = Boolean(data.president_vote_completed)
+    setPresidentVoteCompleted(isCompleted)
+    return isCompleted
+  }, [election])
 
   useEffect(() => {
-    fetchSnapshot()
-    fetchMeta()
-  }, [election?.election.id])
+    // Fetch meta first to know if president has voted, then pass to snapshot
+    const initData = async () => {
+      const isCompleted = await fetchMeta()
+      await fetchSnapshot(isCompleted ?? false)
+    }
+    initData()
+  }, [fetchMeta, fetchSnapshot])
+
 
   /* ================= DERIVED STATE ================= */
 
-  const isVotingOngoing =
-    election?.election.status === "VOTING"
-
-  const resultPublished =
-    election?.election.status === "RESULTS_PUBLISHED"
-
+  const isVotingOngoing = election?.election.status === "VOTING"
+  const resultPublished = election?.election.status === "RESULTS_PUBLISHED"
   const totalVoters = election?.stats.totalVoters ?? 0
 
   const hasTie = useMemo(() => {
-  return results.some(position => {
-    const winnersCount = position.candidates.filter(c => c.isWinner).length;
-    // A tie only matters if we have more winners than actual seats
-    return winnersCount > position.maxSelections;
-  })
-}, [results])
+    return results.some(position => {
+      const winnersCount = position.candidates.filter(c => c.isWinner).length;
+      return winnersCount > position.maxSelections;
+    })
+  }, [results])
 
-  const canPublishResults =
-    !hasTie || presidentVoteCompleted
-
-  const getVotePercentage = (votes: number) => {
-    if (!totalVoters) return "0"
-    return ((votes / totalVoters) * 100).toFixed(1)
-  }
+  const canPublishResults = !hasTie || presidentVoteCompleted
 
   /* ================= ADMIN ACTIONS ================= */
 
@@ -555,8 +564,8 @@ export function ResultsTab({
     })
 
     refetchPendingApproval()
-    await fetchSnapshot()
-    await fetchMeta()
+    const isCompleted = await fetchMeta()
+    await fetchSnapshot(isCompleted ?? false)
   }
 
   const reject = async () => {
@@ -569,14 +578,12 @@ export function ResultsTab({
     refetchPendingApproval()
   }
 
-  /* ================= LOADING ================= */
+  /* ================= RENDER LOGIC ================= */
+
+  if (!election) return null // ✅ Prevent rendering empty states before load
 
   if (loading) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Loading results…
-      </p>
-    )
+    return <p className="text-sm text-muted-foreground">Loading results…</p>
   }
 
   /* ================= PENDING APPROVAL ================= */
@@ -585,35 +592,23 @@ export function ResultsTab({
     return (
       <div className="rounded-lg border border-border bg-card p-4">
         <p className="mb-4 text-sm font-medium text-foreground">
-          {pendingApproval.action_type ===
-            "INITIATE_PRESIDENT_VOTE" &&
-            "Admin requested approval to initiate President vote."}
-          {pendingApproval.action_type ===
-            "PUBLISH_RESULTS" &&
-            "Admin requested approval to publish results."}
+          {pendingApproval.action_type === "INITIATE_PRESIDENT_VOTE" && "Admin requested approval to initiate President vote."}
+          {pendingApproval.action_type === "PUBLISH_RESULTS" && "Admin requested approval to publish results."}
         </p>
 
         {userRole === "observer" && (
           <div className="flex gap-3">
-            <button
-              onClick={approve}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-            >
+            <button onClick={approve} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
               Approve
             </button>
-            <button
-              onClick={reject}
-              className="rounded-md border border-destructive px-4 py-2 text-sm font-medium text-destructive"
-            >
+            <button onClick={reject} className="rounded-md border border-destructive px-4 py-2 text-sm font-medium text-destructive">
               Reject
             </button>
           </div>
         )}
 
         {userRole === "admin" && (
-          <p className="text-xs text-muted-foreground">
-            Waiting for observer approval…
-          </p>
+          <p className="text-xs text-muted-foreground">Waiting for observer approval…</p>
         )}
       </div>
     )
@@ -627,29 +622,18 @@ export function ResultsTab({
         <div className="rounded-lg border border-border bg-card p-4">
           {hasTie && !presidentVoteCompleted ? (
             <>
-              <p className="mb-4 text-sm text-muted-foreground">
-                A tie was detected. President vote is required.
-              </p>
-
+              <p className="mb-4 text-sm text-muted-foreground">A tie was detected. President vote is required.</p>
               {userRole === "admin" && presidentVoteRequired && (
-                <button
-                  onClick={initiatePresidentVoteApproval}
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-                >
+                <button onClick={initiatePresidentVoteApproval} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
                   Initiate President Vote
                 </button>
               )}
             </>
           ) : (
             <>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Results are ready to be published.
-              </p>
+              <p className="mb-4 text-sm text-muted-foreground">Results are ready to be published.</p>
               {userRole === "admin" && canPublishResults && (
-                <button
-                  onClick={initiatePublishApproval}
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-                >
+                <button onClick={initiatePublishApproval} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
                   Publish Results
                 </button>
               )}
@@ -657,9 +641,7 @@ export function ResultsTab({
           )}
 
           {userRole === "observer" && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Observers cannot initiate actions.
-            </p>
+            <p className="mt-2 text-xs text-muted-foreground">Observers cannot initiate actions.</p>
           )}
         </div>
       </div>
@@ -671,15 +653,11 @@ export function ResultsTab({
   return (
     <div className="space-y-6">
       {results.map(position => {
-
         const winners = position.candidates.filter(c => c.isWinner)
-        const lastWinnerVotes = Math.min(...winners.map(c => c.voteCount))
-        const tiedAtBoundary = position.candidates.filter(
-          c => c.voteCount === lastWinnerVotes
-        )
+        const lastWinnerVotes = winners.length > 0 ? Math.min(...winners.map(c => c.voteCount)) : 0
+        const tiedAtBoundary = position.candidates.filter(c => c.voteCount === lastWinnerVotes)
 
-        const tieResolvedByPresident =
-          tiedAtBoundary.length > 1 && presidentVoteCompleted
+        const tieResolvedByPresident = tiedAtBoundary.length > 1 && presidentVoteCompleted
 
         return (
           <div key={position.positionId}>
@@ -692,20 +670,13 @@ export function ResultsTab({
                 <div
                   key={candidate.candidateId}
                   className={`rounded-lg border p-4 ${
-                    candidate.isWinner
-                      ? "border-primary bg-primary/5"
-                      : "border-border bg-card"
+                    candidate.isWinner ? "border-primary bg-primary/5" : "border-border bg-card"
                   }`}
                 >
                   <div className="flex justify-between">
                     <div>
-                      <h4 className="font-semibold">
-                        {candidate.candidateName}
-                      </h4>
-
-                      <p className="text-sm text-muted-foreground">
-                        {candidate.voteCount} votes
-                      </p>
+                      <h4 className="font-semibold">{candidate.candidateName}</h4>
+                      <p className="text-sm text-muted-foreground">{candidate.voteCount} votes</p>
                     </div>
 
                     {candidate.isWinner && (
